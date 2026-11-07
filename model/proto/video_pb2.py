@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bvideo.proto\x12\x05video\"w\n\nVideoFrame\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x11\n\ttimestamp\x18\x02 \x01(\x04\x12\x10\n\x08latitude\x18\x03 \x01(\x01\x12\x11\n\tlongitude\x18\x04 \x01(\x01\x12\x10\n\x08sequence\x18\x05 \x01(\r\x12\x11\n\tstream_id\x18\x06 \x01(\t\")\n\x0eStreamResponse\x12\x17\n\x0f\x66rames_received\x18\x01 \x01(\r2J\n\x0cVideoService\x12:\n\x0cStreamFrames\x12\x11.video.VideoFrame\x1a\x15.video.StreamResponse(\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x0bvideo.proto\x12\x05video\"w\n\nVideoFrame\x12\x0c\n\x04\x64\x61ta\x18\x01 \x01(\x0c\x12\x11\n\ttimestamp\x18\x02 \x01(\r\x12\x10\n\x08latitude\x18\x03 \x01(\x01\x12\x11\n\tlongitude\x18\x04 \x01(\x01\x12\x10\n\x08sequence\x18\x05 \x01(\r\x12\x11\n\tstream_id\x18\x06 \x01(\t\")\n\x0eStreamResponse\x12\x17\n\x0f\x66rames_received\x18\x01 \x01(\r2J\n\x0cVideoService\x12:\n\x0cStreamFrames\x12\x11.video.VideoFrame\x1a\x15.video.StreamResponse(\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)

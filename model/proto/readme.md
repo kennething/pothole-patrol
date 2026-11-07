@@ -15,3 +15,5 @@ producer.py
     what i should be getting
 server.py
     my calculations
+
+tldr: only run server.py

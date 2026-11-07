@@ -108,8 +108,8 @@ def serve():
       ProcessingServiceServicer(), server
   )
 
-  server.add_insecure_port("[::]:50051")
-  print("gRPC Video Processing Server listening on port 50051...")
+  server.add_insecure_port("[::]:8000")
+  print("gRPC Video Processing Server listening on port 8000...")
   server.start()
   server.wait_for_termination()
 
