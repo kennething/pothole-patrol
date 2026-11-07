@@ -1,6 +1,6 @@
 use rocket::{ http::Status, serde::{ json::Json, Deserialize } };
 use rocket_db_pools::Connection;
-use crate::db::db::Db;
+use crate::utils::db::Db;
 
 #[derive(Deserialize)]
 #[serde(crate = "rocket::serde", rename_all = "camelCase")]

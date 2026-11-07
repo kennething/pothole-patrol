@@ -12,12 +12,13 @@ message StreamRequest {
 }
 
 message ProcessingResult {
-  string stream_id = 1;
-  uint64 timestamp = 2;
+  string uuidv7 = 1;
+  uint32 timestamp = 2;
 
   double latitude = 3;
   double longitude = 4;
   
+  // scores 0-100
   uint32 overall_score = 5;
   uint32 area_transit_ridership = 6;
   uint32 area_gdp = 7;

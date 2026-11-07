@@ -1,6 +1,7 @@
-use rocket_db_pools::sqlx::{ self, SqliteConnection, sqlite::SqliteRow };
-use crate::{ db::functions::get_from_row };
+use rocket_db_pools::Connection;
 use rocket::serde::Serialize;
+
+use crate::utils::db::Db;
 
 #[derive(Serialize)]
 #[serde(crate = "rocket::serde", rename_all = "camelCase")]
@@ -12,7 +13,7 @@ impl Entry {
     Self {}
   }
 
-  pub async fn serialize(&self, db: &mut SqliteConnection) -> SerializedEntry {
+  pub async fn serialize(&self, db: &mut Connection<Db>) -> SerializedEntry {
     SerializedEntry {}
   }
 }

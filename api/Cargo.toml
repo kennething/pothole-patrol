@@ -4,7 +4,23 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-rocket_db_pools = { version = "0.2.0", features = ["sqlx_sqlite"] }
+rocket_db_pools = { version = "0.2.0", features = ["sqlx_postgres"] }
 reqwest = { version = "0.11", features = ["json"] }
 rocket = { version = "0.5.1", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+sqlx = { version = "0.7", features = [
+    "runtime-tokio",
+    "tls-rustls",
+    "postgres",
+    "migrate",
+    "macros"
+] }
 serde_json = "1.0.142"
+tonic-prost = "0.14"
+dotenvy = "0.15"
+tonic = "0.14"
+prost = "0.14"
+
+[build-dependencies]
+tonic-prost-build = "0.14"
+protoc-bin-vendored = "3"

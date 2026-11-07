@@ -9,7 +9,7 @@ service VideoService {
 
 message VideoFrame {
   bytes data = 1;
-  uint64 timestamp = 2;
+  uint32 timestamp = 2;
   double latitude = 3;
   double longitude = 4;
   uint32 sequence = 5;

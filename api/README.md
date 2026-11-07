@@ -1,6 +1,6 @@
 # API & Database Backend
 
-Streams data via gRPC from the model backend and stores it in a SQLite database
+Receives data via gRPC from the model backend and stores it in a SQLite database
 for serving to the dashboard frontend with Rocket.rs.
 
 ## Setup Instructions
