@@ -1,10 +1,12 @@
 from concurrent import futures
 import queue
+import time
+import uuid
 import cv2
 import grpc
 import numpy as np
 from ultralytics import YOLO
-import uuid
+
 # Import generated modules from both original proto files
 import result_pb2
 import result_pb2_grpc
@@ -16,6 +18,16 @@ STREAM_QUEUES = {}
 
 # Initialize YOLO model
 model = YOLO("yolov8n.pt")
+
+
+def get_uuidv7() -> str:
+  """Safe UUIDv7 generator supporting Python < 3.13."""
+  if hasattr(uuid, "uuid7"):
+    return str(uuid.uuid7())
+  # Fallback implementation if running Python < 3.13
+  ms = int(time.time() * 1000)
+  rand = uuid.uuid4().hex
+  return f"{ms:012x}-{rand[12:16]}-7{rand[17:20]}-{rand[20:]}"
 
 
 class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
@@ -35,20 +47,20 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
         continue
 
       # 2. Run YOLO inference
-      results = model(img)[0]
+      results = model(img, verbose=False)[0]
       boxes = results.boxes
 
-      # 3. Target check: 0 if objects detected, 1 if none found
+      # 3. Target check: 0 if objects detected, 1 if none found (uint32 compatible)
       has_detections = len(boxes) > 0
-      status_flag = 0 if has_detections else -1
+      status_flag = 0 if has_detections else 1
 
-      # 4. Populate ProcessingResult message
+      # 4. Populate ProcessingResult message with uint32 safety checks
       result_msg = result_pb2.ProcessingResult(
-          uuidv7=str(uuid.uuid7()),
-          timestamp=frame.timestamp,
+          uuidv7=get_uuidv7(),
+          timestamp=int(frame.timestamp) & 0xFFFFFFFF,  # Clamp to uint32 max
           latitude=frame.latitude,
           longitude=frame.longitude,
-          overall_score=status_flag,  # 0 = found, -1 = not found
+          overall_score=status_flag,  # 0 = found, 1 = not found
           area_transit_ridership=0,
           area_gdp=0,
           area_income=0,
@@ -79,7 +91,6 @@ class ProcessingServiceServicer(result_pb2_grpc.ProcessingServiceServicer):
     # Stream out queued results to subscriber
     while context.is_active():
       try:
-        # Non-blocking pull with timeout to maintain context checks
         item = q.get(timeout=1.0)
         yield item
       except queue.Empty:
