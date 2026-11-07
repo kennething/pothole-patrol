@@ -19,7 +19,7 @@ onMounted(async () => {
   $socket.connect();
 
   stream.value = await navigator.mediaDevices.getUserMedia({
-    video: { width: 1280, height: 720, facingMode: "environment" },
+    video: { width: 1280, height: 1280, facingMode: "environment" },
     audio: false
   });
 
@@ -33,7 +33,7 @@ onMounted(async () => {
 
   const canvas = document.createElement("canvas");
   canvas.width = 1280;
-  canvas.height = 720;
+  canvas.height = 1280;
 
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
