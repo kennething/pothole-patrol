@@ -15,7 +15,7 @@ const proto = grpc.loadPackageDefinition(
 const videoPackage = proto.video as grpc.GrpcObject;
 const VideoService = videoPackage.VideoService as grpc.ServiceClientConstructor;
 
-const client = new VideoService(process.env.BACKEND_URL!, grpc.credentials.createInsecure());
+const client = new VideoService(process.env.GRPC_SERVER_URL!, grpc.credentials.createInsecure());
 
 export type VideoFrame = {
   data: Buffer;

@@ -19,9 +19,7 @@ for serving to the dashboard frontend with Rocket.rs.
    cargo install --locked watchexec-cli
    ```
 
-4. Put the `db.sqlite` database in `/src/db/`.
-
-5. Run the server:
+4. Run the server:
 
    ```sh
    watchexec -r -e rs -- "cargo run --bin backend"

@@ -20,4 +20,4 @@ CREATE INDEX idx_entries_timestamp
     ON entries (timestamp);
 
 CREATE INDEX idx_entries_latitude_longitude
-    ON entries (latitude, longitude);
+    ON entries USING BTREE (latitude, longitude);

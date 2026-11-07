@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col items-center justify-center">
-    <video v-show="stream" ref="video" autoplay playsinline muted></video>
+    <video v-show="stream" ref="video" class="w-dvw h-dvh" autoplay playsinline muted></video>
     <p v-show="!stream" class="text-3xl font-bold">We need camera permissions to continue :(</p>
   </div>
 </template>
@@ -51,6 +51,7 @@ onMounted(async () => {
       navigator.geolocation.getCurrentPosition((position) => {
         latitude = position.coords.latitude;
         longitude = position.coords.longitude;
+        console.log(latitude, longitude);
       });
     }
 
