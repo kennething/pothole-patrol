@@ -1,0 +1,24 @@
+@import url("https://fonts.googleapis.com/css2?family=Cherry+Bomb+One&family=DynaPuff:wght@400..700&display=swap");
+
+@import "tailwindcss";
+
+.title {
+  font-family: "Cherry Bomb One";
+}
+* {
+  font-family: "DynaPuff";
+}
+
+button,
+div[role="button"],
+a {
+  @apply cursor-pointer transition-transform select-none active:scale-95;
+}
+
+img {
+  @apply pointer-events-none;
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+}

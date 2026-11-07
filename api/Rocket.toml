@@ -1,0 +1,5 @@
+[debug]
+port = 9100
+
+[default.databases.sqlite_db]
+url = "sqlite://src/db/db.sqlite"
