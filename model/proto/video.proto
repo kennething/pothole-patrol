@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package video;
+
+service VideoService {
+  rpc StreamFrames(stream VideoFrame)
+    returns (StreamResponse);
+}
+
+message VideoFrame {
+  bytes data = 1;
+  uint64 timestamp = 2;
+  double latitude = 3;
+  double longitude = 4;
+  uint32 sequence = 5;
+  string stream_id = 6;
+}
+
+message StreamResponse {
+  uint32 frames_received = 1;
+}
