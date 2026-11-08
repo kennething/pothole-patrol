@@ -6,8 +6,8 @@ import express from "express";
 import cors from "cors";
 import "dotenv/config";
 
-if (!process.env.CAMERA_URL || !process.env.BACKEND_URL) {
-  console.error("missing CAMERA_URL and BACKEND_URL");
+if (!process.env.CAMERA_URL || !process.env.GRPC_SERVER_URL) {
+  console.error("missing CAMERA_URL or GRPC_SERVER_URL");
   process.exit(1);
 }
 
