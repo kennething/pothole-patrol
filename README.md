@@ -1,4 +1,4 @@
-<!-- <img src="./frontend/public/sprites/chicken/hehe.webp" height="100" /> -->
+<img src="./static/logo.svg" height="100" />
 
 # Pothole Patrol - NYCAIRR Hackathon Submission
 
@@ -28,6 +28,7 @@ calculated, including, but not limited to:
 
 - Average income areas
 - Population of the area
+- Commercial impact of the pothole
 - Severity of the pothole
 
 Then, the model backend sends the data to the API backend via a persistent
@@ -48,7 +49,7 @@ The following technologies were used to build our application:
 - Express.js + Socket.IO for the WebSocket server
 - YOLOv8 + PyTorch for the model backend
 - Rocket.rs + PostgreSQL for the API backend
-- Next.js (React) + Tauri for the dashboard frontend app
+- Next.js (React) for the dashboard frontend app
 
 - gRPC for inter-server communication
 - WebSockets for communication between camera and WebSocket server
@@ -56,7 +57,14 @@ The following technologies were used to build our application:
 
 ## Known Limitations
 
+The current limitation is bottlenecked by how fast the CV model can process
+images, so about 1-2 FPS per model backend instance. This could be improved with
+a more optimized model or by using multiple model backend instances to process
+images in parallel.
 
+Also, API calls to the US Cencus Bureau and Geocodio are rate-limited, so we
+have to cache results to avoid hitting the rate limit. This is a known
+limitation that we would like to improve in the future.
 
 ## AI Usage
 
