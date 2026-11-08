@@ -1,6 +1,3 @@
-import streamlit as st
-
-
 from concurrent import futures
 from functools import lru_cache
 import queue
@@ -71,7 +68,7 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
       if img is None:
         continue
 
-
+      model = YOLO("yolov8n.pt")
       # 2. Run YOLO inference
       results = model(img, verbose=False)[0]
       boxes = results.boxes
@@ -138,7 +135,8 @@ class ProcessingServiceServicer(result_pb2_grpc.ProcessingServiceServicer):
 
     while context.is_active():
         # 1. Fetch current queue instance dynamically to avoid stale references
-        q = STREAM_QUEUES.get(stream_id)
+        q = STREAM_QUEUES.get(request.stream_id)
+
         if q is None:
             time.sleep(0.1)
             continue
