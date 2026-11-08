@@ -54,6 +54,10 @@ The following technologies were used to build our application:
 - WebSockets for communication between camera and WebSocket server
 - REST API for communication between dashboard frontend and API backend
 
+## Known Limitations
+
+
+
 ## AI Usage
 
 AI was used to debug parts of our code.
