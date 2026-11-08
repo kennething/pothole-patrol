@@ -1,6 +1,6 @@
 use crate::result::{ processing_service_client::ProcessingServiceClient, ProcessingResult, StreamRequest };
 
-use std::{ sync::Arc, error::Error, time::Duration };
+use std::{ error::Error, time::Duration };
 use tonic::transport::{ Endpoint, Channel };
 use rocket_db_pools::sqlx;
 use sqlx::PgPool;

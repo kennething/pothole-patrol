@@ -8,13 +8,13 @@
 <script setup lang="ts">
 const { $socket } = useNuxtApp();
 
-const FPS = 10;
+const FPS = 2;
 const QUALITY = 0.75;
 
 const video = useTemplateRef("video");
 const stream = ref<MediaStream>();
 
-let frameCallback: number;
+let interval: number;
 onMounted(async () => {
   $socket.connect();
 
@@ -38,8 +38,8 @@ onMounted(async () => {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  frameCallback = video.value.requestVideoFrameCallback((timestamp) => {
-    if (timestamp - lastPolled < 1000 / FPS) return;
+  interval = setInterval(() => {
+    if (Date.now() - lastPolled < 1000 / FPS) return;
 
     if (isEncoding || isInFlight) return;
     if (!$socket.connected) return;
@@ -56,7 +56,7 @@ onMounted(async () => {
     }
 
     isEncoding = true;
-    lastPolled = timestamp;
+    lastPolled = Date.now();
     ctx.drawImage(video.value, 0, 0, canvas.width, canvas.height);
 
     canvas.toBlob(
@@ -83,11 +83,11 @@ onMounted(async () => {
       "image/jpeg",
       QUALITY
     );
-  });
+  }, 1000 / FPS);
 });
 
 onBeforeUnmount(() => {
-  if (frameCallback) video.value?.cancelVideoFrameCallback(frameCallback);
+  if (interval) clearInterval(interval);
   $socket.disconnect();
   stream.value?.getTracks().forEach((track) => track.stop());
 });
