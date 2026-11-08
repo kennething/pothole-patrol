@@ -1,4 +1,6 @@
-<img src="./static/logo.svg" height="100" />
+<p align="center">
+  <img src="./static/logo.svg" height="200" />
+</p>
 
 # Pothole Patrol - NYCAIRR Hackathon Submission
 
@@ -55,6 +57,11 @@ The following technologies were used to build our application:
 - WebSockets for communication between camera and WebSocket server
 - REST API for communication between dashboard frontend and API backend
 
+> <img src="./static/architecture.png" />
+>
+> An initial high-level architecture diagram of our application. The dashboard
+> does not use Tauri.
+
 ## Known Limitations
 
 The current limitation is bottlenecked by how fast the CV model can process
@@ -62,7 +69,7 @@ images, so about 1-2 FPS per model backend instance. This could be improved with
 a more optimized model or by using multiple model backend instances to process
 images in parallel.
 
-Also, API calls to the US Cencus Bureau and Geocodio are rate-limited, so we
+Also, API calls to the US Census Bureau and Geocodio are rate-limited, so we
 have to cache results to avoid hitting the rate limit. This is a known
 limitation that we would like to improve in the future.
 
