@@ -5,12 +5,14 @@ import queue
 import threading
 import time
 import uuid
+from typing import Optional
 
 import cv2
 import grpc
 import numpy as np
 import requests
 import torch
+from dotenv import load_dotenv
 from torchvision.transforms import functional as F
 from ultralytics import YOLO
 
@@ -21,6 +23,9 @@ import video_pb2
 import video_pb2_grpc
 
 from model import IMG_SIZE, MEAN, STD, load_pothole_model
+
+load_dotenv(os.path.join(os.path.dirname(__file__), ".env"))
+CENSUS_API_KEY = os.environ.get("CENSUS_API_KEY")
 
 
 # Every active StreamResults call registers its own queue here, and each result
@@ -515,7 +520,10 @@ def _census_for_cell(lat: float, lon: float) -> dict:
     return get_data_by_lat_lon(lat, lon)
 
 
-def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef7da"):
+def get_data_by_lat_lon(lat, lon, api_key=None):
+    if api_key is None:
+        api_key = CENSUS_API_KEY
+
     # Step A: Reverse Geocode Lat/Lon to Census Tract
     geo_url = (
         f"https://geocoding.geo.census.gov/geocoder/geographies/coordinates?"
@@ -571,7 +579,10 @@ def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef
         "median_household_income": int(values[2]) if values[2] else None
     }
 
-def get_area_commercial_by_lat_lon(lat: float, lon: float, api_key: str = "a9bf4bb4a132bfcfb283de32039ffaf8065ef7da") -> dict:
+def get_area_commercial_by_lat_lon(lat: float, lon: float, api_key: Optional[str] = None) -> dict:
+    if api_key is None:
+        api_key = CENSUS_API_KEY
+
     # -------------------------------------------------------------------------
     # Step 1: Reverse Geocode (lat, lon) -> State (2-digit) & County (3-digit)
     # Note: Census Geocoder expects x=longitude, y=latitude
