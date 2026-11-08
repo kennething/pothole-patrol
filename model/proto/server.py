@@ -116,24 +116,47 @@ class ProcessingServiceServicer(result_pb2_grpc.ProcessingServiceServicer):
 
 
   def StreamResults(self, request, context):
-    stream_id = request.stream_id
+    # stream_id = request.stream_id
 
 
-    # Initialize queue if consumer connects before frames arrive
-    if stream_id not in STREAM_QUEUES:
-      STREAM_QUEUES[stream_id] = queue.Queue()
+    # # Initialize queue if consumer connects before frames arrive
+    # if stream_id not in STREAM_QUEUES:
+    #   STREAM_QUEUES[stream_id] = queue.Queue()
 
 
-    q = STREAM_QUEUES[stream_id]
+    # q = STREAM_QUEUES[stream_id]
 
-
-    # Stream out queued results to subscriber
+    # # Stream out queued results to subscriber
+    # while context.is_active():
+    #   try:
+    #     item = q.get(timeout=1.0)
+    #     yield item
+    #   except queue.Empty:
+    #     continue
+    # def StreamResults(self, request, context):
+    # stream_id = request.stream_id
+    
     while context.is_active():
-      try:
-        item = q.get(timeout=1.0)
-        yield item
-      except queue.Empty:
-        continue
+        # 1. Fetch current queue instance dynamically to avoid stale references
+        q = STREAM_QUEUES.get(stream_id)
+        if q is None:
+            time.sleep(0.1)
+            continue
+
+        try:
+            item = q.get(timeout=1.0)
+
+            # 2. End of Stream signal (Sentinel check)
+            if item is None:
+                break
+
+            yield item
+
+        except queue.Empty:
+            continue
+        except (grpc.RpcError, GeneratorExit):
+            # 3. Handle client disconnection during yield cleanly
+            break
 
 
 
@@ -251,7 +274,7 @@ def estimate_pothole_severity(
 
     # 3. Load model and set to evaluation mode
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = PotholeModel()
+    model = YOLO(model_path)
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.to(device)
     model.eval()
