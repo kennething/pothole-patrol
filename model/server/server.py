@@ -1,6 +1,7 @@
 from concurrent import futures
 from functools import lru_cache
 import queue
+from random import random
 import time
 import uuid
 from typing import List, Optional, Tuple, Dict, Any
@@ -13,6 +14,14 @@ import torch
 from PIL import Image
 from torchvision.transforms import functional as F
 from pathlib import Path
+import cv2
+import numpy as np
+import torch
+import torch.nn as nn
+import streamlit as st
+from PIL import Image
+from torchvision.transforms import functional as F
+import timm
 
 # Import generated modules from both original proto files
 import result_pb2
@@ -75,21 +84,26 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
 
 
       census_data = get_data_by_lat_lon(frame.latitude, frame.longitude)
-      pothole_severity = estimate_pothole_severity(img)["severity_level"]
-   
+      # pothole_severity = estimate_pothole_severity(img)["severity_level"]
+      print("c")
+    
       # 4. Populate ProcessingResult message with uint32 safety checks
+      # ERROR is not saving into RESULT_QUEUE
+
+      #add to queue only if status flag is 0 (objects detected)
+
       result_msg = result_pb2.ProcessingResult(
           uuidv7=get_uuidv7(),
           timestamp=int(frame.timestamp) & 0xFFFFFFFF,  # Clamp to uint32 max
           latitude=frame.latitude,
           longitude=frame.longitude,
-          overall_score=status_flag,  # 0 = found, 1 = not found
-          area_transit_ridership=0,
-          area_gdp=0,
+          overall_score= 0, #sum of all following data 
+          area_transit_ridership=0, #ignore
+          area_gdp=0, #ignore
           area_income=census_data.get("median_household_income", 0) or 0,
-          area_commercial=0,
+          area_commercial=0, #ignore
           traffic_density=census_data.get("population", 0) or 0,
-          pothole_severity=pothole_severity,
+          pothole_severity= 0, #use estimate_pothole_severity(img)["severity_level"]
       )
 
 
@@ -106,35 +120,18 @@ class ProcessingServiceServicer(result_pb2_grpc.ProcessingServiceServicer):
 
 
   def StreamResults(self, request, context):
-    # stream_id = request.stream_id
-
-
-    # # Initialize queue if consumer connects before frames arrive
-    # if stream_id not in STREAM_QUEUES:
-    #   STREAM_QUEUES[stream_id] = queue.Queue()
-
-
-    # q = STREAM_QUEUES[stream_id]
-
-    # # Stream out queued results to subscriber
-    # while context.is_active():
-    #   try:
-    #     item = q.get(timeout=1.0)
-    #     yield item
-    #   except queue.Empty:
-    #     continue
-    # def StreamResults(self, request, context):
-    # stream_id = request.stream_id
 
     while context.is_active():
         # 1. Fetch current queue instance dynamically to avoid stale references
         q = RESULT_QUEUE
+        #q is empty for some reason fix
 
         if q is None:
             time.sleep(0.1)
             continue
 
         try:
+            #never reached
             item = q.get(timeout=1.0)
 
             # 2. End of Stream signal (Sentinel check)
@@ -225,62 +222,43 @@ def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef
         "median_household_income": int(values[2]) if values[2] else None
     }
 
-def estimate_pothole_severity(
-    image_input, model_path: str = "length_of_pothole.pt", camera_distance: float = 90.0
-) -> dict:
-    """Estimates pothole severity from an input image using Ultralytics YOLO."""
-    
-    # 1. Load model directly (Ultralytics auto-loads weights)
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    pothole_model = YOLO(model_path)
+# function estimate pothole is based on length_of_pothole.pt which is in pytorch which doesnt want to work
+#Function doesnt run 
+# 1. Define the model class directly in the script
+class PotholeModel(nn.Module):
+    def __init__(self, model_name="efficientnet_b0"):
+        super(PotholeModel, self).__init__()
+        self.backbone = timm.create_model(model_name, pretrained=False, num_classes=4)
 
-    # 2. Run inference directly on PIL/NumPy image
-    results = pothole_model(image_input, device=device, verbose=False)[0]
-    boxes = results.boxes
+    def forward(self, x):
+        return self.backbone(x)
 
-    # Handle case where no potholes are detected
-    if boxes is None or len(boxes) == 0:
-        return {
-            "severity_level": "None",
-            "average_depth_metric": 0.0,
-            "detected_count": 0,
-        }
+# 2. Unified Function
+def estimate_pothole_severity(image, model_path="length_of_pothole.pt", camera_distance=90):
+    model = PotholeModel()
+    model.load_state_dict(torch.load(model_path, map_location=torch.device('cpu')))
+    model.eval()
 
-    # 3. Extract bounding box coordinates [xmin, ymin, xmax, ymax]
-    perceived_depths = []
-    xyxy_boxes = boxes.xyxy.cpu().numpy()  # Extract coordinates tensor as NumPy array
+    img_array = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
+    tensor_img = F.to_tensor(img_array).unsqueeze(0)
 
-    for bbox in xyxy_boxes:
-        xmin, ymin, xmax, ymax = bbox[:4]
-        length = float(ymax - ymin)
-        width = float(xmax - xmin)
+    with torch.no_grad():
+        pred_bboxes = model(tensor_img)
 
+    if len(pred_bboxes) == 0:
+        return 0.0
+
+    focal_lengths = []
+    for bbox in pred_bboxes:
+        width = bbox[2] - bbox[0]
+        length = bbox[3] - bbox[1]
+        
         if width > 0:
-            perceived_focal_length = (length * camera_distance) / width
-            perceived_depths.append(perceived_focal_length)
+            focal_length = (length * camera_distance) / width
+            focal_lengths.append(focal_length.item() if isinstance(focal_length, torch.Tensor) else focal_length)
 
-    if not perceived_depths:
-        return {
-            "severity_level": "None",
-            "average_depth_metric": 0.0,
-            "detected_count": 0,
-        }
+    return float(np.mean(focal_lengths)) if focal_lengths else 0.0
 
-    avg_depth = float(np.mean(perceived_depths))
-
-    # 4. Classify severity
-    if avg_depth < 60.0:
-        severity = "Minor"
-    elif 60.0 <= avg_depth < 100.0:
-        severity = "Moderate"
-    else:
-        severity = "Severe"
-
-    return {
-        "severity_level": severity,
-        "average_depth_metric": round(avg_depth, 2),
-        "detected_count": len(perceived_depths),
-    }
 
 if __name__ == "__main__":
   serve()
