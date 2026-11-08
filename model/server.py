@@ -236,7 +236,7 @@ def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef
 
 
 def estimate_pothole_severity(
-    image_input, model_path: str = "proto\length_of_pothole.pt", camera_distance: float = 90.0
+    image_input, model_path: str = "length_of_pothole.pt", camera_distance: float = 90.0
 ) -> dict:
     """Estimates the depth/severity metric of pothole(s) from an input image.
 
