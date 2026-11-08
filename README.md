@@ -62,7 +62,7 @@ images, so about 1-2 FPS per model backend instance. This could be improved with
 a more optimized model or by using multiple model backend instances to process
 images in parallel.
 
-Also, API calls to the US Cencus Bureau and Geocodio are rate-limited, so we
+Also, API calls to the US Census Bureau and Geocodio are rate-limited, so we
 have to cache results to avoid hitting the rate limit. This is a known
 limitation that we would like to improve in the future.
 
