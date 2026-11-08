@@ -135,7 +135,7 @@ class ProcessingServiceServicer(result_pb2_grpc.ProcessingServiceServicer):
     #     continue
     # def StreamResults(self, request, context):
     # stream_id = request.stream_id
-    
+
     while context.is_active():
         # 1. Fetch current queue instance dynamically to avoid stale references
         q = STREAM_QUEUES.get(stream_id)
@@ -236,7 +236,7 @@ def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef
 
 
 def estimate_pothole_severity(
-    image_input, model_path: str = "length_of_pothole.pt", camera_distance: float = 90.0
+    image_input, model_path: str = "proto\length_of_pothole.pt", camera_distance: float = 90.0
 ) -> dict:
     """Estimates the depth/severity metric of pothole(s) from an input image.
 
@@ -278,7 +278,6 @@ def estimate_pothole_severity(
     model.load_state_dict(torch.load(model_path, map_location=device))
     model.to(device)
     model.eval()
-
 
     # 4. Perform model inference
     with torch.no_grad():
