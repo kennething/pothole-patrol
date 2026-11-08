@@ -1,6 +1,8 @@
 from concurrent import futures
+from functools import lru_cache
 import os
 import queue
+import threading
 import time
 import uuid
 
@@ -21,8 +23,29 @@ import video_pb2_grpc
 from model import IMG_SIZE, MEAN, STD, load_pothole_model
 
 
-# Thread-safe queue of ProcessingResult messages awaiting delivery.
-RESULT_QUEUE = queue.Queue()
+# Every active StreamResults call registers its own queue here, and each result
+# is copied into all of them.
+#
+# A single shared queue does NOT work: queue.Queue is competing-consumer, so two
+# subscribers split the stream between them instead of each receiving every
+# result. The API reconnects every 3s (api/src/utils/grpc.rs subscribe()), and a
+# stale generator still parked in get() would win items from the live one and
+# drop them -- results the server believed it had sent.
+#
+# NOTE: request.stream_id is deliberately ignored, i.e. this is a broadcast.
+# websocket/app.ts sends `streamId: socket.id` (random per connection) while
+# api/src/main.rs subscribes with a fixed STREAM_ID env var, so those two ids can
+# never match and routing by stream_id would deliver nothing.
+SUBSCRIBERS = set()
+SUBSCRIBERS_LOCK = threading.Lock()
+
+# Per-subscriber queue bound. A slow or dead subscriber must never grow memory
+# without limit -- each queued message holds a full JPEG frame (~330 KB).
+RESULT_QUEUE_MAX = int(os.environ.get("RESULT_QUEUE_MAX", 256))
+
+# Results dropped because no subscriber was attached, or because a subscriber's
+# queue overflowed. Printed on drop so the condition is visible in the logs.
+DROPPED_RESULTS = 0
 
 # Detection model. Loaded once at import; reloading it per frame reads the
 # weights off disk for every single frame.
@@ -71,9 +94,30 @@ POTHOLE_CLASSES = [
 ]
 MIN_SEVERITY = int(os.environ.get("MIN_SEVERITY", 1))
 
+# Duplicate suppression. Without this, a camera sitting at one pothole at 30fps
+# emits ~30 results per second for the same hole, each with a fresh uuidv7 -- so
+# the `uuid UNIQUE` constraint in the API's schema cannot collapse them either.
+#
+# Frames are bucketed into a grid cell by rounding their coordinates, and a cell
+# may emit at most once per DEDUP_WINDOW_S. DEDUP_PRECISION=4 is ~11m at NYC
+# latitudes. Set DEDUP_WINDOW_S=0 to disable suppression entirely.
+DEDUP_PRECISION = int(os.environ.get("DEDUP_PRECISION", 4))
+DEDUP_WINDOW_S = float(os.environ.get("DEDUP_WINDOW_S", 10))
+RECENT_EMISSIONS = {}
+RECENT_EMISSIONS_LOCK = threading.Lock()
+
 # The Census API returns large negative sentinels (e.g. -666666666) instead of
 # null when a tract has no estimate for a variable.
 CENSUS_NULL_THRESHOLD = 0
+
+# The census lookup makes two blocking HTTP calls. Without a timeout a hung
+# request pins a gRPC worker forever.
+CENSUS_TIMEOUT_S = float(os.environ.get("CENSUS_TIMEOUT_S", 5))
+
+# Each live stream (camera or subscriber) holds one worker for its entire
+# lifetime, so this must exceed cameras + subscribers -- it is not a request
+# rate. The old value of 10 starved once a few streams were connected.
+GRPC_MAX_WORKERS = int(os.environ.get("GRPC_MAX_WORKERS", 32))
 
 # Normalization bounds for the census-derived scores. result.proto documents
 # every score field as 0-100, and the API casts them straight into an INTEGER
@@ -104,6 +148,85 @@ def get_uuidv7() -> str:
     raw[6] = (raw[6] & 0x0F) | 0x70  # version 7
     raw[8] = (raw[8] & 0x3F) | 0x80  # variant 10xx
     return str(uuid.UUID(bytes=bytes(raw)))
+
+
+def subscribe_queue() -> queue.Queue:
+    """Register a queue to receive every subsequent result."""
+    q = queue.Queue(maxsize=RESULT_QUEUE_MAX)
+    with SUBSCRIBERS_LOCK:
+        SUBSCRIBERS.add(q)
+        count = len(SUBSCRIBERS)
+    print(f"Subscriber attached ({count} active)")
+    return q
+
+
+def unsubscribe_queue(q: queue.Queue) -> None:
+    """Deregister a queue so a finished stream stops consuming results."""
+    with SUBSCRIBERS_LOCK:
+        SUBSCRIBERS.discard(q)
+        count = len(SUBSCRIBERS)
+    print(f"Subscriber detached ({count} active)")
+
+
+def publish(result_msg) -> None:
+    """Copy one result into every subscriber's queue.
+
+    With no subscribers the message is dropped rather than buffered: holding
+    frames for a consumer that may never arrive is what let memory grow without
+    bound and flooded the API with stale data when it finally connected.
+    """
+    global DROPPED_RESULTS
+
+    with SUBSCRIBERS_LOCK:
+        targets = list(SUBSCRIBERS)
+
+    if not targets:
+        DROPPED_RESULTS += 1
+        print(f"No subscribers; dropped result (total dropped: {DROPPED_RESULTS})")
+        return
+
+    for q in targets:
+        try:
+            q.put_nowait(result_msg)
+        except queue.Full:
+            # Drop this subscriber's oldest result to make room, so a slow
+            # consumer falls behind instead of blocking the frame loop.
+            try:
+                q.get_nowait()
+            except queue.Empty:
+                pass
+            DROPPED_RESULTS += 1
+            print(f"Subscriber queue full; dropped oldest (total dropped: {DROPPED_RESULTS})")
+            try:
+                q.put_nowait(result_msg)
+            except queue.Full:
+                pass
+
+
+def should_emit(latitude: float, longitude: float) -> bool:
+    """True if this location has not already been reported recently.
+
+    Buckets coordinates into a grid cell and allows one emission per cell per
+    DEDUP_WINDOW_S. Expired cells are pruned on each call so the map cannot grow
+    without bound over a long run.
+    """
+    if DEDUP_WINDOW_S <= 0:
+        return True
+
+    cell = (round(latitude, DEDUP_PRECISION), round(longitude, DEDUP_PRECISION))
+    now = time.monotonic()
+
+    with RECENT_EMISSIONS_LOCK:
+        for key, seen_at in list(RECENT_EMISSIONS.items()):
+            if now - seen_at > DEDUP_WINDOW_S:
+                del RECENT_EMISSIONS[key]
+
+        last_seen = RECENT_EMISSIONS.get(cell)
+        if last_seen is not None and now - last_seen <= DEDUP_WINDOW_S:
+            return False
+
+        RECENT_EMISSIONS[cell] = now
+        return True
 
 
 def census_value(value):
@@ -252,8 +375,14 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
             if severity < MIN_SEVERITY:
                 continue
 
-            # 5. Enrich with census data, normalized to 0-100.
-            census_data = get_data_by_lat_lon(frame.latitude, frame.longitude)
+            # 5. Suppress repeats of a pothole already reported from this spot.
+            #    Checked before the census lookup so a suppressed frame costs no
+            #    network round trip.
+            if not should_emit(frame.latitude, frame.longitude):
+                continue
+
+            # 6. Enrich with census data, normalized to 0-100.
+            census_data = census_for_location(frame.latitude, frame.longitude)
             if "error" in census_data:
                 print("Census lookup failed: " + str(census_data["error"]))
                 census_data = {}
@@ -276,8 +405,8 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
                 pothole_severity=severity,
             )
 
-            # 5. Push result to queue for downstream consumption
-            RESULT_QUEUE.put(result_msg)
+            # 7. Hand the result to every attached subscriber
+            publish(result_msg)
 
         return video_pb2.StreamResponse(frames_received=frames_processed)
 
@@ -285,25 +414,42 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
 class ProcessingServiceServicer(result_pb2_grpc.ProcessingServiceServicer):
 
     def StreamResults(self, request, context):
-        while context.is_active():
-            try:
-                item = RESULT_QUEUE.get(timeout=1.0)
+        # This stream's own queue. Registered for the life of the call and
+        # always removed in the finally, so a client that disconnects (the API
+        # reconnects every 3s) cannot leave a generator behind that keeps
+        # consuming results nobody will read.
+        q = subscribe_queue()
+
+        try:
+            while context.is_active():
+                try:
+                    item = q.get(timeout=1.0)
+                except queue.Empty:
+                    continue
 
                 # End of Stream signal (Sentinel check)
                 if item is None:
                     break
 
-                yield item
-
-            except queue.Empty:
-                continue
-            except (grpc.RpcError, GeneratorExit):
-                # Handle client disconnection during yield cleanly
-                break
+                try:
+                    yield item
+                except (grpc.RpcError, GeneratorExit):
+                    # The item is already off the queue at this point. Put it
+                    # back so a disconnect mid-send does not destroy a result.
+                    try:
+                        q.put_nowait(item)
+                    except queue.Full:
+                        pass
+                    raise
+        except (grpc.RpcError, GeneratorExit):
+            # Client disconnected; nothing more to do.
+            pass
+        finally:
+            unsubscribe_queue(q)
 
 
 def serve():
-    server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+    server = grpc.server(futures.ThreadPoolExecutor(max_workers=GRPC_MAX_WORKERS))
 
     # Bind both original services to the server
     video_pb2_grpc.add_VideoServiceServicer_to_server(
@@ -319,6 +465,28 @@ def serve():
     server.wait_for_termination()
 
 
+def census_for_location(lat, lon) -> dict:
+    """Census lookup for a frame, cached by grid cell.
+
+    Consecutive frames come from nearly the same spot and resolve to the same
+    tract, so calling the API per frame made two blocking HTTP round trips for
+    an answer that had not changed. Rounding to the dedup grid before caching
+    collapses those to one call per cell.
+    """
+    return _census_for_cell(
+        round(float(lat), DEDUP_PRECISION),
+        round(float(lon), DEDUP_PRECISION),
+    )
+
+
+@lru_cache(maxsize=1024)
+def _census_for_cell(lat: float, lon: float) -> dict:
+    # NOTE: lru_cache stores failures too. That is deliberate -- it stops a dead
+    # or rate-limited census API from being hammered once per frame. Restart the
+    # server (or clear the cache) to retry a cell that errored.
+    return get_data_by_lat_lon(lat, lon)
+
+
 def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef7da"):
     # Step A: Reverse Geocode Lat/Lon to Census Tract
     geo_url = (
@@ -327,7 +495,7 @@ def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef
     )
 
     try:
-        geo_resp = requests.get(geo_url).json()
+        geo_resp = requests.get(geo_url, timeout=CENSUS_TIMEOUT_S).json()
     except Exception as e:
         return {"error": f"Geocoder request failed: {e}"}
 
@@ -356,7 +524,7 @@ def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef
         acs_url += f"&key={api_key}"
 
     try:
-        acs_resp = requests.get(acs_url)
+        acs_resp = requests.get(acs_url, timeout=CENSUS_TIMEOUT_S)
     except Exception as e:
         return {"error": f"ACS request failed: {e}"}
 
