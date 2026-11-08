@@ -43,6 +43,7 @@ io.on("connection", (socket) => {
       streamId: socket.id
     });
 
+    console.log(accepted, sequence);
     if (accepted) return callback(null);
     grpcStream.once("drain", () => callback(null));
   });

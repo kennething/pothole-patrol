@@ -1,0 +1,17 @@
+opencv-python==4.13.0.92
+packaging==26.0
+pillow==12.1.1
+pipreq==0.4
+pipreqs==0.4.13
+pydantic==2.12.5
+pydantic_core==2.41.5
+pyparsing==3.3.2
+typing-inspection==0.4.2
+typing_extensions==4.15.0
+ultralytics==8.4.21
+ultralytics-thop==2.0.18
+urllib3==2.5.0
+uvicorn==0.41.0
+numpy==2.4.3
+grpcio==1.85.1
+grpcio-tools==1.85.1
