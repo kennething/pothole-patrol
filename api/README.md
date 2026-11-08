@@ -1,11 +1,11 @@
 # API & Database Backend
 
-Receives data via gRPC from the model backend and stores it in a SQLite database
-for serving to the dashboard frontend with Rocket.rs.
+Receives data via gRPC from the model backend and stores it in a PostgreSQL
+database for serving to the dashboard frontend with Rocket.rs.
 
 ## Setup Instructions
 
-1. Make sure Rust and Cargo are installed on your machine.
+1. Make sure Rust, Cargo, and Docker are installed on your machine.
 
 2. Select this directory:
 
@@ -26,7 +26,18 @@ for serving to the dashboard frontend with Rocket.rs.
    STREAM_ID= # a unique id for this stream
    ```
 
-5. Run the server:
+5. Create and run the database:
+
+   ```sh
+   docker run --name rocket-postgres \
+   -e POSTGRES_USER=user \
+   -e POSTGRES_PASSWORD=password \
+   -e POSTGRES_DB=db \
+   -p 9101:5432 \
+   -d postgres:17
+   ```
+
+6. Run the server:
 
    ```sh
    watchexec -r -e rs -- "cargo run --bin backend"
