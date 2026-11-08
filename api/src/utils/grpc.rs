@@ -29,8 +29,12 @@ async fn receive_results(pool: &PgPool, server_url: &str, stream_id: &str) -> Re
   while let Some(result) = stream.message().await? {
     println!("shiofhsaiuf");
 
-    match save_image(&result.uuidv7, &result.data).await {
-      Ok(path) => println!("Saved image to {:?}", path),
+    match save_image(pool, &result.uuidv7, &result.data, result.latitude, result.longitude).await {
+      Ok(Some(path)) => println!("Saved image to {:?}", path),
+      Ok(None) => {
+        println!("No image data to save for UUID: {}", result.uuidv7);
+        continue;
+      }
       Err(error) => {
         eprintln!("Failed to save image: {error}");
         continue;

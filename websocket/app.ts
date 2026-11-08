@@ -45,6 +45,7 @@ io.on("connection", (socket) => {
 
     console.log(accepted, sequence);
     if (accepted) return callback(null);
+    // TODO: handle backpressure properly
     grpcStream.once("drain", () => callback(null));
   });
 
