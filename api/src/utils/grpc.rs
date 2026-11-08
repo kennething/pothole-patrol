@@ -1,4 +1,4 @@
-use crate::result::{ processing_service_client::ProcessingServiceClient, ProcessingResult, StreamRequest };
+use crate::{ result::{ ProcessingResult, StreamRequest, processing_service_client::ProcessingServiceClient }, utils::image::save_image };
 
 use std::{ error::Error, time::Duration };
 use tonic::transport::{ Endpoint, Channel };
@@ -27,6 +27,14 @@ async fn receive_results(pool: &PgPool, server_url: &str, stream_id: &str) -> Re
   let mut stream = response.into_inner();
 
   while let Some(result) = stream.message().await? {
+    match save_image(&result.uuidv7, &result.data).await {
+      Ok(path) => println!("Saved image to {:?}", path),
+      Err(error) => {
+        eprintln!("Failed to save image: {error}");
+        continue;
+      }
+    }
+
     if let Err(error) = save_result(pool, &result).await {
       eprintln!("Database insert failed: {error}");
     }
@@ -39,7 +47,7 @@ async fn save_result(pool: &PgPool, result: &ProcessingResult) -> Result<(), sql
   sqlx
     ::query(
       r#"
-        INSERT INTO results (
+        INSERT INTO entries (
             uuid,
             timestamp,
             latitude,

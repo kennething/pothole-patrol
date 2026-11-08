@@ -8,6 +8,7 @@ rocket_db_pools = { version = "0.2.0", features = ["sqlx_postgres"] }
 reqwest = { version = "0.11", features = ["json"] }
 rocket = { version = "0.5.1", features = ["json"] }
 tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v7"] }
 sqlx = { version = "0.7", features = [
     "runtime-tokio",
     "tls-rustls",
@@ -18,6 +19,7 @@ sqlx = { version = "0.7", features = [
 serde_json = "1.0.142"
 tonic-prost = "0.14"
 dotenvy = "0.15"
+base64 = "0.22"
 tonic = "0.14"
 prost = "0.14"
 

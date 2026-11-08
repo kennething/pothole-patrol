@@ -14,16 +14,17 @@ message StreamRequest {
 message ProcessingResult {
   string uuidv7 = 1;
   uint32 timestamp = 2;
+  bytes data = 3;
 
-  double latitude = 3;
-  double longitude = 4;
+  double latitude = 4;
+  double longitude = 5;
   
   // scores 0-100
-  uint32 overall_score = 5;
-  uint32 area_transit_ridership = 6;
-  uint32 area_gdp = 7;
-  uint32 area_income = 8;
-  uint32 area_commercial = 9;
-  uint32 traffic_density = 10;
-  uint32 pothole_severity = 11;
+  uint32 overall_score = 6;
+  uint32 area_transit_ridership = 7;
+  uint32 area_gdp = 8;
+  uint32 area_income = 9;
+  uint32 area_commercial = 10;
+  uint32 traffic_density = 11;
+  uint32 pothole_severity = 12;
 }

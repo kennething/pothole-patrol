@@ -44,5 +44,5 @@ fn rocket() -> _ {
       })
     )
     .mount("/", routes![index])
-    .mount("/pothole", routes![routes::pothole::Area])
+    .mount("/pothole", routes![routes::pothole::Area, routes::pothole::Detail])
 }
