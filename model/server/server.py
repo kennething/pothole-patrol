@@ -55,6 +55,26 @@ FOCAL_PX = float(os.environ.get("FOCAL_PX", 800))
 # A pothole this long (cm) or longer scores the maximum severity of 100.
 MAX_LEN_CM = float(os.environ.get("MAX_LEN_CM", 100))
 
+# Only frames that actually contain a pothole are streamed downstream.
+#
+# Two gates, both of which a frame must pass:
+#   1. POTHOLE_CLASSES -- comma-separated YOLO class names that count as a
+#      pothole. Leave unset while running the stock COCO yolov8n (which has no
+#      pothole class) to accept any detection; set it to "pothole" the moment a
+#      pothole-trained checkpoint replaces yolov8n and the gate becomes exact.
+#   2. MIN_SEVERITY -- the severity model must report at least this score, which
+#      drops frames where the regressor finds no meaningful pothole extent.
+POTHOLE_CLASSES = [
+    name.strip().lower()
+    for name in os.environ.get("POTHOLE_CLASSES", "").split(",")
+    if name.strip()
+]
+MIN_SEVERITY = int(os.environ.get("MIN_SEVERITY", 1))
+
+# The Census API returns large negative sentinels (e.g. -666666666) instead of
+# null when a tract has no estimate for a variable.
+CENSUS_NULL_THRESHOLD = 0
+
 # Normalization bounds for the census-derived scores. result.proto documents
 # every score field as 0-100, and the API casts them straight into an INTEGER
 # column, so raw dollars and raw population counts cannot be sent as-is.
@@ -86,18 +106,36 @@ def get_uuidv7() -> str:
     return str(uuid.UUID(bytes=bytes(raw)))
 
 
+def census_value(value):
+    """Return a usable census number, or None for a missing/sentinel value.
+
+    The ACS API encodes "no estimate" as a large negative number rather than
+    null, and those must not be read as "this tract earns nothing" -- doing so
+    would push unmeasured tracts to the top of the repair-priority list.
+    """
+    if value is None:
+        return None
+    try:
+        number = float(value)
+    except (TypeError, ValueError):
+        return None
+    return number if number > CENSUS_NULL_THRESHOLD else None
+
+
 def score_income(median_income) -> int:
     """Map a tract's median household income onto 0-100."""
-    if not median_income:
+    income = census_value(median_income)
+    if income is None:
         return 0
-    return clamp_score(float(median_income) / MAX_INCOME * 100)
+    return clamp_score(income / MAX_INCOME * 100)
 
 
 def score_density(population) -> int:
     """Map a tract's population onto 0-100 as a traffic-density proxy."""
-    if not population:
+    people = census_value(population)
+    if people is None:
         return 0
-    return clamp_score(float(population) / MAX_POPULATION * 100)
+    return clamp_score(people / MAX_POPULATION * 100)
 
 
 def compute_overall(severity: int, density: int, income_score: int) -> int:
@@ -110,6 +148,29 @@ def compute_overall(severity: int, density: int, income_score: int) -> int:
     """
     overall = 0.5 * severity + 0.3 * density + 0.2 * (100 - income_score)
     return clamp_score(overall)
+
+
+def has_pothole(results) -> bool:
+    """True when the detector found a pothole in this frame.
+
+    With POTHOLE_CLASSES unset, any detection passes -- the stock COCO yolov8n
+    has no pothole class, so there is nothing more specific to match on. Set
+    POTHOLE_CLASSES once a pothole-trained checkpoint is in place and the gate
+    tightens to exactly those classes with no other code change.
+    """
+    boxes = results.boxes
+    if boxes is None or len(boxes) == 0:
+        return False
+
+    if not POTHOLE_CLASSES:
+        return True
+
+    names = results.names or {}
+    for class_id in boxes.cls.tolist():
+        label = str(names.get(int(class_id), class_id)).lower()
+        if label in POTHOLE_CLASSES:
+            return True
+    return False
 
 
 def estimate_pothole_severity(image, camera_distance: float = CAMERA_DISTANCE_CM) -> dict:
@@ -179,13 +240,19 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
 
             # 2. Run YOLO inference
             results = model(img, verbose=False)[0]
-            boxes = results.boxes
 
-            # 3. Only frames with a detection are worth enriching and queueing.
-            if len(boxes) == 0:
+            # 3. Gate: nothing leaves this server unless a pothole was found.
+            if not has_pothole(results):
                 continue
 
-            # 4. Enrich with census data and severity, normalized to 0-100.
+            # 4. Second gate: the severity model must agree there is a pothole
+            #    of meaningful extent. Computed before the census lookup so a
+            #    rejected frame costs no network round trip.
+            severity = estimate_pothole_severity(img)["severity_level"]
+            if severity < MIN_SEVERITY:
+                continue
+
+            # 5. Enrich with census data, normalized to 0-100.
             census_data = get_data_by_lat_lon(frame.latitude, frame.longitude)
             if "error" in census_data:
                 print("Census lookup failed: " + str(census_data["error"]))
@@ -193,7 +260,6 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
 
             income_score = score_income(census_data.get("median_household_income"))
             density_score = score_density(census_data.get("population"))
-            severity = estimate_pothole_severity(img)["severity_level"]
 
             result_msg = result_pb2.ProcessingResult(
                 uuidv7=get_uuidv7(),
