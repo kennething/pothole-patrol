@@ -54,6 +54,19 @@ The following technologies were used to build our application:
 - WebSockets for communication between camera and WebSocket server
 - REST API for communication between dashboard frontend and API backend
 
+## Known Limitations
+
+- Detection currently runs on the stock COCO-trained `yolov8n` checkpoint, not a
+  pothole-trained one, so the detection gate flags any recognized object rather
+  than potholes specifically.
+- Pothole severity comes from a `res2net50d` bounding-box regressor
+  (`model/server/length_of_pothole.pt`) converted to a 0-100 score through an
+  uncalibrated pinhole-camera model. It is a consistent relative ranking across
+  frames from the same camera, not a true physical measurement. Calibrate
+  `FOCAL_PX` and `CAMERA_DISTANCE_CM` per camera for real-world lengths.
+- `area_transit_ridership`, `area_gdp` and `area_commercial` have no data source
+  yet and are always reported as 0.
+
 ## AI Usage
 
 AI was used to debug parts of our code.
