@@ -3,11 +3,11 @@ export type MiniPothole = {
   timestamp: number;
   latitude: number;
   longitude: number;
+  address: string | null;
   overallScore: number;
 };
 
 export type Pothole = MiniPothole & {
-  address: string | null;
   areaTransitRidership: number;
   areaGdp: number;
   areaIncome: number;

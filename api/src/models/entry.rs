@@ -7,6 +7,7 @@ pub struct MinifiedEntry {
   pub timestamp: u32,
   pub latitude: f64,
   pub longitude: f64,
+  pub address: Option<String>,
   pub overall_score: u32,
 }
 

@@ -11,3 +11,5 @@ docs.md
 # database
 db.sqlite3
 *.sqlite-journal
+images/**
+!images/.gitkeep

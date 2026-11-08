@@ -22,8 +22,10 @@ database for serving to the dashboard frontend with Rocket.rs.
 4. Create a `.env` in the root of this directory with the following content:
 
    ```sh
+   FRONTEND_URL=http://localhost:3100
    GRPC_SERVER_URL=http://localhost:8000
    STREAM_ID= # a unique id for this stream
+   GEOCODIO_API_KEY=
    ```
 
 5. Create and run the database:

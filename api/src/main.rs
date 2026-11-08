@@ -1,8 +1,8 @@
 #[macro_use]
 extern crate rocket;
 
-use rocket_cors::{ AllowedHeaders, AllowedOrigins, CorsOptions };
 use rocket::{ fairing::AdHoc, http::{ Status, Method }, Rocket, Orbit };
+use rocket_cors::{ AllowedHeaders, AllowedOrigins, CorsOptions };
 use rocket_db_pools::Database;
 use sqlx::{ Pool, Postgres };
 use std::env;
@@ -26,7 +26,7 @@ fn index() -> Status {
 fn rocket() -> _ {
   dotenvy::dotenv().ok();
 
-  let cors = CorsOptions::default()
+  let cors: rocket_cors::Cors = CorsOptions::default()
     .allowed_origins(AllowedOrigins::some_exact(&[std::env::var("FRONTEND_URL").expect("FRONTEND_URL missing")]))
     .allowed_methods(vec![Method::Get, Method::Post, Method::Put, Method::Delete].into_iter().map(From::from).collect())
     .allowed_headers(AllowedHeaders::some(&["Authorization", "Accept", "Content-Type"]))

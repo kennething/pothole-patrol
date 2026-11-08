@@ -1,7 +1,19 @@
 use rocket::serde::Deserialize;
 use std::error::Error;
+use reqwest::Client;
 
-// Define structs to match the Geocodio JSON response format
+#[derive(Deserialize, Debug)]
+#[serde(crate = "rocket::serde")]
+pub struct BatchGeocodioResponse {
+  pub results: Vec<BatchItem>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(crate = "rocket::serde")]
+pub struct BatchItem {
+  pub response: GeocodioResponse,
+}
+
 #[derive(Deserialize, Debug)]
 #[serde(crate = "rocket::serde")]
 struct GeocodioResponse {
@@ -14,14 +26,26 @@ struct GeocodioResult {
   formatted_address: String,
 }
 
-pub async fn get_address(latitude: f64, longitude: f64) -> Result<String,  Box<dyn Error + Send + Sync>> {
-  let url: String = format!("https://api.geocod.io/v2.1/reverse?q={},{}&api_key={}", latitude, longitude, std::env::var("GEOCODIO_API_KEY").expect("GEOCODIO_API_KEY must be set in .env"));
+pub async fn get_addresses(coordinates: &[(f64, f64)]) -> Result<Vec<Option<String>>, Box<dyn Error + Send + Sync>> {
+  let url: String = format!("https://api.geocod.io/v2.1/reverse?api_key={}", std::env::var("GEOCODIO_API_KEY").expect("GEOCODIO_API_KEY must be set in .env"));
 
-  let response: GeocodioResponse = reqwest::get(&url).await?.json::<GeocodioResponse>().await?;
+  let payload: Vec<String> = coordinates
+    .iter()
+    .map(|(lat, lon)| format!("{},{}", lat, lon))
+    .collect();
 
-  if let Some(best_match) = response.results.first() {
-    Ok(best_match.formatted_address.clone())
-  } else {
-    Err("No address found for these coordinates.".into())
-  }
+  let client: Client = Client::new();
+  let batch_response: BatchGeocodioResponse = client.post(&url).json(&payload).send().await?.json::<BatchGeocodioResponse>().await?;
+
+  let addresses: Vec<Option<String>> = batch_response.results
+    .into_iter()
+    .map(|item| {
+      item.response.results
+        .into_iter()
+        .next()
+        .map(|best_match| best_match.formatted_address)
+    })
+    .collect();
+
+  Ok(addresses)
 }

@@ -4,7 +4,7 @@ use sqlx::postgres::PgRow;
 
 use crate::utils::db::{ Db, get_from_row };
 use crate::utils::image::get_image_base64;
-use crate::utils::geocodio::get_address;
+use crate::utils::geocodio::get_addresses;
 use crate::models::Entry;
 
 /// # Detail
@@ -40,7 +40,7 @@ pub async fn detail(mut db: Connection<Db>, uuid: String) -> Result<Json<Entry>,
 
   let latitude: f64 = get_from_row(&row, "latitude");
   let longitude: f64 = get_from_row(&row, "longitude");
-  let address: Option<String> = get_address(latitude, longitude).await.ok();
+  let address: Option<String> = get_addresses(&[(latitude, longitude)]).await.ok().and_then(|v| v.into_iter().next().flatten());
 
   let entry: Entry = Entry {
     uuid,

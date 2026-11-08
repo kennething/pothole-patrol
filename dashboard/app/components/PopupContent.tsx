@@ -28,11 +28,11 @@ export default function PopupContent({ pothole, isActive }: { pothole: MiniPotho
       <h3 className="text-lg font-bold">Overall Score: {pothole.overallScore}</h3>
       <div className="relative h-2 w-full overflow-hidden rounded-full bg-neutral-300">
         <div
-          className={`absolute top-0 left-0 h-full ${pothole.overallScore > 50 ? (pothole.overallScore > 80 ? "bg-green-500" : "bg-yellow-500") : "bg-red-500"}`}
+          className={`absolute top-0 left-0 h-full ${pothole.overallScore > 30 ? (pothole.overallScore > 50 ? "bg-red-500" : "bg-yellow-500") : "bg-green-500"}`}
           style={{ width: `${pothole.overallScore}%` }}
         ></div>
       </div>
-      <p className="text-sm">{details?.address ? details.address : `${pothole.latitude.toFixed(4)}, ${pothole.longitude.toFixed(4)} (no address found)`}</p>
+      <p className="text-sm">{pothole.address ? pothole.address : `${pothole.latitude.toFixed(4)}, ${pothole.longitude.toFixed(4)} (no address found)`}</p>
       <p className="text-xs text-neutral-700">Detected {new Date(pothole.timestamp * 1000).toLocaleString()}</p>
 
       <div className="mt-3">
@@ -40,9 +40,8 @@ export default function PopupContent({ pothole, isActive }: { pothole: MiniPotho
           <p className="animate-pulse text-sm text-gray-500">Loading details...</p>
         ) : details ? (
           <div className="space-y-1">
-            {/* Render your newly fetched data here */}
-            <p className="text-sm font-medium">Transit Importance: {details.areaTransitRidership}</p>
-            <p className="text-sm font-medium">GDP: {details.areaGdp}</p>
+            {/* <p className="text-sm font-medium">Transit Importance: {details.areaTransitRidership}</p> */}
+            {/* <p className="text-sm font-medium">GDP: {details.areaGdp}</p> */}
             <p className="text-sm font-medium">Income: {details.areaIncome}</p>
             <p className="text-sm font-medium">Commercial: {details.areaCommercial}</p>
             <p className="text-sm font-medium">Traffic Density: {details.trafficDensity}</p>
