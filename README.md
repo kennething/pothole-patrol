@@ -30,6 +30,14 @@ calculated, including, but not limited to:
 - Population of the area
 - Severity of the pothole
 
+Then, the model backend sends the data to the API backend via a persistent
+unidirectional gRPC stream. The API server stores the data in a PostgreSQL
+database and serves it to the dashboard frontend via a standard REST API.
+
+Other users can now connect to the dashboard frontend to view pothole data in
+real-time, including a map of potholes and a recommended repair priority list
+based on the data collected and our algorithms.
+
 ## Our Tech Stack
 
 We used a microservice architecture philosophy to build our application, with
