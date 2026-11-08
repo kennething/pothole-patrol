@@ -18,7 +18,13 @@ Uses Next.js to serve a dashboard for viewing pothole data.
    bun install
    ```
 
-4. Run the development server:
+4. Create a `.env` in the root of this directory with the following content:
+
+   ```sh
+   BACKEND_URL=http://localhost:9100
+   ```
+
+5. Run the development server:
 
    ```sh
    bun dev -- -p 3100

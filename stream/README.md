@@ -22,16 +22,14 @@ stream video to a server.
    bun install
    ```
 
-4. Create a `.env` file in this directory with the following content:
+4. Create a `.env` in the root of this directory with the following content:
 
    ```sh
-   NUXT_PUBLIC_BACKEND_URL=https://<ip>:8008 # dont append /
+   NUXT_PUBLIC_BACKEND_URL=http://localhost:9000
    ```
 
-   where `<ip>` is your local network IP address.
-
-5. Run the development server on your network:
+5. Run the development server:
 
    ```sh
-   bun dev -- --https --host=<ip>
+   bun dev
    ```

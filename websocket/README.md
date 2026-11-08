@@ -21,14 +21,12 @@ Forwards streamed video to the model backend via gRPC for processing.
    bun install
    ```
 
-4. Create a `.env` file in this directory with the following content:
+4. Create a `.env` in the root of this directory with the following content:
 
    ```sh
-   CAMERA_URL=https://<ip>:3000 # url of the camera stream
-   BACKEND_URL=https://<ip>:8000 # url of the model backend server
+   CAMERA_URL=http://localhost:3000
+   GRPC_SERVER_URL=localhost:8000
    ```
-
-   where `<ip>` is your local network IP address.
 
 5. Run the server:
 

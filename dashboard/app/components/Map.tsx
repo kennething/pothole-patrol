@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMapEvents } from "react-leaflet";
-import L from "leaflet";
-import { Pothole } from "../utils/types";
 import { fetchEndpoint } from "../utils/fetch";
+import { MiniPothole } from "../utils/types";
+import { useEffect, useState } from "react";
+import L from "leaflet";
 
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -30,10 +30,10 @@ function MapEventHandler({ onBoundsChange }: { onBoundsChange: (topLeft: L.LatLn
 }
 
 export default function Map() {
-  const [potholes, setPotholes] = useState<Pothole[]>([]);
+  const [potholes, setPotholes] = useState<MiniPothole[]>([]);
 
   async function fetchPotholes(topLeft: L.LatLng, bottomRight: L.LatLng) {
-    const [data, error] = await fetchEndpoint<Pothole[]>(`/potholes/area?nwlat=${topLeft.lat}&nwlng=${topLeft.lng}&selat=${bottomRight.lat}&selng=${bottomRight.lng}`);
+    const [data, error] = await fetchEndpoint<MiniPothole[]>(`/potholes/area?nwlat=${topLeft.lat}&nwlng=${topLeft.lng}&selat=${bottomRight.lat}&selng=${bottomRight.lng}`);
     if (error) return console.error(error);
     setPotholes(data);
   }

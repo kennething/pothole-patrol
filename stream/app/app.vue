@@ -38,22 +38,8 @@ onMounted(async () => {
   const ctx = canvas.getContext("2d");
   if (!ctx) return;
 
-  interval = setInterval(() => {
-    if (Date.now() - lastPolled < 1000 / FPS) return;
-
-    if (isEncoding || isInFlight) return;
-    if (!$socket.connected) return;
-    if (!video.value || video.value.readyState < 2) return;
-
-    let latitude: number;
-    let longitude: number;
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((position) => {
-        latitude = position.coords.latitude;
-        longitude = position.coords.longitude;
-        console.log(latitude, longitude);
-      });
-    }
+  function pollFrame(latitude?: number, longitude?: number) {
+    if (!ctx || !video.value) return;
 
     isEncoding = true;
     lastPolled = Date.now();
@@ -83,6 +69,22 @@ onMounted(async () => {
       "image/jpeg",
       QUALITY
     );
+  }
+
+  interval = setInterval(() => {
+    if (Date.now() - lastPolled < 1000 / FPS) return;
+
+    if (isEncoding || isInFlight) return;
+    if (!$socket.connected) return;
+    if (!video.value || video.value.readyState < 2) return;
+
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition((position) => {
+        const latitude = position.coords.latitude;
+        const longitude = position.coords.longitude;
+        pollFrame(latitude, longitude);
+      });
+    } else pollFrame();
   }, 1000 / FPS);
 });
 

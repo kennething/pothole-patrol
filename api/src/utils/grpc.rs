@@ -1,7 +1,7 @@
 use crate::{ result::{ ProcessingResult, StreamRequest, processing_service_client::ProcessingServiceClient }, utils::image::save_image };
 
+use tonic::{ Response, Streaming, transport::{ Endpoint, Channel } };
 use std::{ error::Error, time::Duration };
-use tonic::transport::{ Endpoint, Channel };
 use rocket_db_pools::sqlx;
 use sqlx::PgPool;
 
@@ -18,15 +18,17 @@ pub async fn subscribe(pool: PgPool, server_url: String, stream_id: String) {
 async fn receive_results(pool: &PgPool, server_url: &str, stream_id: &str) -> Result<(), Box<dyn Error + Send + Sync>> {
   let channel: Channel = Endpoint::from_shared(server_url.to_owned())?.connect_timeout(Duration::from_secs(5)).connect().await?;
 
-  let mut client = ProcessingServiceClient::new(channel);
+  let mut client: ProcessingServiceClient<Channel> = ProcessingServiceClient::new(channel);
 
-  let response = client.stream_results(StreamRequest {
+  let response: Response<Streaming<ProcessingResult>> = client.stream_results(StreamRequest {
     stream_id: stream_id.to_owned(),
   }).await?;
 
-  let mut stream = response.into_inner();
+  let mut stream: Streaming<ProcessingResult> = response.into_inner();
 
   while let Some(result) = stream.message().await? {
+    println!("shiofhsaiuf");
+
     match save_image(&result.uuidv7, &result.data).await {
       Ok(path) => println!("Saved image to {:?}", path),
       Err(error) => {

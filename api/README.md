@@ -19,7 +19,14 @@ for serving to the dashboard frontend with Rocket.rs.
    cargo install --locked watchexec-cli
    ```
 
-4. Run the server:
+4. Create a `.env` in the root of this directory with the following content:
+
+   ```sh
+   GRPC_SERVER_URL=http://localhost:8000
+   STREAM_ID= # a unique id for this stream
+   ```
+
+5. Run the server:
 
    ```sh
    watchexec -r -e rs -- "cargo run --bin backend"
