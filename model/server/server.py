@@ -85,7 +85,7 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
 
       census_data = get_data_by_lat_lon(frame.latitude, frame.longitude)
       # pothole_severity = estimate_pothole_severity(img)["severity_level"]
-      print("c")
+      #print("c")
     
       # 4. Populate ProcessingResult message with uint32 safety checks
       # ERROR is not saving into RESULT_QUEUE
@@ -95,6 +95,7 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
       result_msg = result_pb2.ProcessingResult(
           uuidv7=get_uuidv7(),
           timestamp=int(frame.timestamp) & 0xFFFFFFFF,  # Clamp to uint32 max
+          data=frame.data,
           latitude=frame.latitude,
           longitude=frame.longitude,
           overall_score= 0, #sum of all following data 
