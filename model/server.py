@@ -1,32 +1,24 @@
-import streamlit as st
-
-
 from concurrent import futures
 from functools import lru_cache
 import queue
 import time
 import uuid
 from typing import List, Optional, Tuple, Dict, Any
-
-
 import cv2
 import grpc
 import numpy as np
 import requests
 from ultralytics import YOLO
-
+import torch
+from PIL import Image
+from torchvision.transforms import functional as F
+from pathlib import Path
 
 # Import generated modules from both original proto files
 import result_pb2
 import result_pb2_grpc
 import video_pb2
 import video_pb2_grpc
-
-
-import numpy as np
-import torch
-from PIL import Image
-from torchvision.transforms import functional as F
 
 
 # Thread-safe queue mapping stream_id -> queue of ProcessingResult messages
@@ -234,78 +226,39 @@ def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef
         "median_household_income": int(values[2]) if values[2] else None
     }
 
-
 def estimate_pothole_severity(
     image_input, model_path: str = "length_of_pothole.pt", camera_distance: float = 90.0
 ) -> dict:
-    """Estimates the depth/severity metric of pothole(s) from an input image.
+    """Estimates pothole severity from an input image using Ultralytics YOLO."""
+    
+    # 1. Load model directly (Ultralytics auto-loads weights)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    pothole_model = YOLO(model_path)
 
+    # 2. Run inference directly on PIL/NumPy image
+    results = pothole_model(image_input, device=device, verbose=False)[0]
+    boxes = results.boxes
 
-    Parameters:
-        image_input (str | PIL.Image.Image | np.ndarray): File path, PIL Image,
-          or NumPy OpenCV array.
-        model_path (str): Path to the trained PyTorch model checkpoint.
-        camera_distance (float): Camera distance from ground in centimeters
-          (default: 90 cm).
-
-
-    Returns:
-        dict: Output containing calculated depth metric, detection count, and
-        severity classification.
-    """
-    # 1. Load and convert image to RGB PIL Image
-    if isinstance(image_input, str):
-        image = Image.open(image_input).convert("RGB")
-    elif isinstance(image_input, np.ndarray):
-        # Convert BGR OpenCV array to RGB PIL Image
-        image = Image.fromarray(cv2.cvtColor(image_input, cv2.COLOR_BGR2RGB))
-    elif isinstance(image_input, Image.Image):
-        image = image_input.convert("RGB")
-    else:
-        raise ValueError(
-            "Unsupported input format. Provide a file path, PIL Image, or NumPy array."
-        )
-
-
-    # 2. Preprocess image into tensor
-    cv_image = cv2.cvtColor(np.array(image), cv2.COLOR_RGB2BGR)
-    tensor_image = F.to_tensor(cv_image).unsqueeze(0)
-
-
-    # 3. Load model and set to evaluation mode
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model = YOLO(model_path)
-    model.load_state_dict(torch.load(model_path, map_location=device))
-    model.to(device)
-    model.eval()
-
-    # 4. Perform model inference
-    with torch.no_grad():
-        pred_bboxes = model(tensor_image.to(device))
-
-
-    # Handle edge case where no potholes are detected
-    if pred_bboxes is None or len(pred_bboxes) == 0:
+    # Handle case where no potholes are detected
+    if boxes is None or len(boxes) == 0:
         return {
             "severity_level": "None",
             "average_depth_metric": 0.0,
             "detected_count": 0,
         }
 
-
-    # 5. Calculate focal depth metric for each detected bounding box
+    # 3. Extract bounding box coordinates [xmin, ymin, xmax, ymax]
     perceived_depths = []
-    for bbox in pred_bboxes:
-        # Bounding box format: [xmin, ymin, xmax, ymax]
-        xmin, ymin, xmax, ymax = bbox[0], bbox[1], bbox[2], bbox[3]
+    xyxy_boxes = boxes.xyxy.cpu().numpy()  # Extract coordinates tensor as NumPy array
+
+    for bbox in xyxy_boxes:
+        xmin, ymin, xmax, ymax = bbox[:4]
         length = float(ymax - ymin)
         width = float(xmax - xmin)
-
 
         if width > 0:
             perceived_focal_length = (length * camera_distance) / width
             perceived_depths.append(perceived_focal_length)
-
 
     if not perceived_depths:
         return {
@@ -314,11 +267,9 @@ def estimate_pothole_severity(
             "detected_count": 0,
         }
 
-
     avg_depth = float(np.mean(perceived_depths))
 
-
-    # 6. Classify severity based on calculated depth metric
+    # 4. Classify severity
     if avg_depth < 60.0:
         severity = "Minor"
     elif 60.0 <= avg_depth < 100.0:
@@ -326,13 +277,11 @@ def estimate_pothole_severity(
     else:
         severity = "Severe"
 
-
     return {
         "severity_level": severity,
         "average_depth_metric": round(avg_depth, 2),
         "detected_count": len(perceived_depths),
     }
-
 
 if __name__ == "__main__":
   serve()

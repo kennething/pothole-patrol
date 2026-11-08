@@ -26,7 +26,7 @@ def frame_generator(video_file, stream_id):
 
 
 def send_video():
-  channel = grpc.insecure_channel("localhost:50051")
+  channel = grpc.insecure_channel("localhost:8000")
   stub = video_pb2_grpc.VideoServiceStub(channel)
   response = stub.StreamFrames(frame_generator("test.mp4", "stream_001"))
   print(f"Server acknowledged receiving {response.frames_received} frames.")
