@@ -25,9 +25,9 @@ use crate::models::MinifiedEntry;
 #[get("/area?<nwlat>&<nwlng>&<selat>&<selng>")]
 pub async fn area(mut db: Connection<Db>, nwlat: f64, nwlng: f64, selat: f64, selng: f64) -> Result<Json<Vec<MinifiedEntry>>, Status> {
   let entries: Vec<MinifiedEntry> = sqlx
-    ::query("SELECT uuid, timestamp, latitude, longitude, overall_score FROM entries WHERE latitude BETWEEN $1 AND $2 AND (longitude >= $3 OR longitude <= $4)")
-    .bind(nwlat)
+    ::query("SELECT uuid, timestamp, latitude, longitude, overall_score FROM entries WHERE latitude BETWEEN $1 AND $2 AND longitude BETWEEN $3 AND $4")
     .bind(selat)
+    .bind(nwlat)
     .bind(nwlng)
     .bind(selng)
     .fetch_all(&mut **db).await
@@ -37,10 +37,10 @@ pub async fn area(mut db: Connection<Db>, nwlat: f64, nwlng: f64, selat: f64, se
         .map(|row: PgRow| {
           Ok(MinifiedEntry {
             uuid: get_from_row::<String>(&row, "uuid"),
-            timestamp: get_from_row::<i64>(&row, "timestamp") as u32,
+            timestamp: get_from_row::<i32>(&row, "timestamp") as u32,
             latitude: get_from_row::<f64>(&row, "latitude"),
             longitude: get_from_row::<f64>(&row, "longitude"),
-            overall_score: get_from_row::<i64>(&row, "overall_score") as u32,
+            overall_score: get_from_row::<i32>(&row, "overall_score") as u32,
           })
         })
         .collect()

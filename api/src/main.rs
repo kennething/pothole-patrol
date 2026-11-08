@@ -1,9 +1,10 @@
 #[macro_use]
 extern crate rocket;
 
-use rocket::{ fairing::AdHoc, http::Status, Rocket, Orbit };
+use rocket_cors::{ AllowedHeaders, AllowedOrigins, CorsOptions };
+use rocket::{ fairing::AdHoc, http::{ Status, Method }, Rocket, Orbit };
 use rocket_db_pools::Database;
-use sqlx::{Pool, Postgres};
+use sqlx::{ Pool, Postgres };
 use std::env;
 
 mod models;
@@ -25,8 +26,17 @@ fn index() -> Status {
 fn rocket() -> _ {
   dotenvy::dotenv().ok();
 
+  let cors = CorsOptions::default()
+    .allowed_origins(AllowedOrigins::some_exact(&[std::env::var("FRONTEND_URL").expect("FRONTEND_URL missing")]))
+    .allowed_methods(vec![Method::Get, Method::Post, Method::Put, Method::Delete].into_iter().map(From::from).collect())
+    .allowed_headers(AllowedHeaders::some(&["Authorization", "Accept", "Content-Type"]))
+    .allow_credentials(true)
+    .to_cors()
+    .expect("Failed to create CORS fairing");
+
   rocket
     ::build()
+    .attach(cors)
     .attach(Db::init())
     .attach(AdHoc::on_ignite("sqlx migrations", utils::migrations::run_migrations))
     .attach(

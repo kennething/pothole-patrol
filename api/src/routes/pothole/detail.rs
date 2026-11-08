@@ -4,6 +4,7 @@ use sqlx::postgres::PgRow;
 
 use crate::utils::db::{ Db, get_from_row };
 use crate::utils::image::get_image_base64;
+use crate::utils::geocodio::get_address;
 use crate::models::Entry;
 
 /// # Detail
@@ -37,18 +38,23 @@ pub async fn detail(mut db: Connection<Db>, uuid: String) -> Result<Json<Entry>,
   let uuid: String = get_from_row(&row, "uuid");
   let image: String = get_image_base64(&uuid).await.map_err(|_| Status::NotFound)?;
 
+  let latitude: f64 = get_from_row(&row, "latitude");
+  let longitude: f64 = get_from_row(&row, "longitude");
+  let address: Option<String> = get_address(latitude, longitude).await.ok();
+
   let entry: Entry = Entry {
     uuid,
-    timestamp: get_from_row::<i64>(&row, "timestamp") as u32,
-    latitude: get_from_row::<f64>(&row, "latitude"),
-    longitude: get_from_row::<f64>(&row, "longitude"),
-    overall_score: get_from_row::<i64>(&row, "overall_score") as u32,
-    area_transit_ridership: get_from_row::<i64>(&row, "area_transit_ridership") as u32,
-    area_gdp: get_from_row::<i64>(&row, "area_gdp") as u32,
-    area_income: get_from_row::<i64>(&row, "area_income") as u32,
-    area_commercial: get_from_row::<i64>(&row, "area_commercial") as u32,
-    traffic_density: get_from_row::<i64>(&row, "traffic_density") as u32,
-    pothole_severity: get_from_row::<i64>(&row, "pothole_severity") as u32,
+    timestamp: get_from_row::<i32>(&row, "timestamp") as u32,
+    latitude,
+    longitude,
+    address,
+    overall_score: get_from_row::<i32>(&row, "overall_score") as u32,
+    area_transit_ridership: get_from_row::<i32>(&row, "area_transit_ridership") as u32,
+    area_gdp: get_from_row::<i32>(&row, "area_gdp") as u32,
+    area_income: get_from_row::<i32>(&row, "area_income") as u32,
+    area_commercial: get_from_row::<i32>(&row, "area_commercial") as u32,
+    traffic_density: get_from_row::<i32>(&row, "traffic_density") as u32,
+    pothole_severity: get_from_row::<i32>(&row, "pothole_severity") as u32,
     image,
   };
 

@@ -37,7 +37,7 @@ async function requestEndpoint(endpoint: string, method?: string, body?: object)
  */
 async function requestEndpoint<T>(endpoint: string, method?: string, body?: object): Promise<T>;
 async function requestEndpoint<T>(endpoint: string, method?: string, body?: object): Promise<T | void> {
-  if (!process.env.backendUrl) throw new Error("whats a backend");
+  if (!process.env.NEXT_PUBLIC_BACKEND_URL) throw new Error("whats a backend");
 
   const options: RequestInit = { signal: AbortSignal.timeout(10000) };
   if (method) {
@@ -46,7 +46,7 @@ async function requestEndpoint<T>(endpoint: string, method?: string, body?: obje
     options.body = JSON.stringify(body);
   }
 
-  const res = await fetch(process.env.backendUrl + endpoint, options);
+  const res = await fetch(process.env.NEXT_PUBLIC_BACKEND_URL + endpoint, options);
   if (!res.ok) {
     if (res.headers.get("Content-Type")?.includes("application/json")) {
       const errorData = (await res.json()) as { error: string };

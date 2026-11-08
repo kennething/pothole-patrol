@@ -42,3 +42,11 @@ database for serving to the dashboard frontend with Rocket.rs.
    ```sh
    watchexec -r -e rs -- "cargo run --bin backend"
    ```
+
+## Accessing the Database
+
+Run the following command to access the database:
+
+```sh
+docker exec -it rocket-postgres psql -U user -d db
+```

@@ -1,5 +1,6 @@
-import type { Metadata } from "next";
 import { Comic_Relief } from "next/font/google";
+import type { Metadata } from "next";
+import "./assets/leaflet.css";
 import "./assets/main.css";
 
 const comicRelief = Comic_Relief({

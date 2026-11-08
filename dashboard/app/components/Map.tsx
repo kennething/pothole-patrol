@@ -6,6 +6,8 @@ import { MiniPothole } from "../utils/types";
 import { useEffect, useState } from "react";
 import L from "leaflet";
 
+import PopupContent from "./PopupContent";
+
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
   iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png",
@@ -31,9 +33,10 @@ function MapEventHandler({ onBoundsChange }: { onBoundsChange: (topLeft: L.LatLn
 
 export default function Map() {
   const [potholes, setPotholes] = useState<MiniPothole[]>([]);
+  const [activePopupId, setActivePopupId] = useState<string>();
 
   async function fetchPotholes(topLeft: L.LatLng, bottomRight: L.LatLng) {
-    const [data, error] = await fetchEndpoint<MiniPothole[]>(`/potholes/area?nwlat=${topLeft.lat}&nwlng=${topLeft.lng}&selat=${bottomRight.lat}&selng=${bottomRight.lng}`);
+    const [data, error] = await fetchEndpoint<MiniPothole[]>(`/pothole/area?nwlat=${topLeft.lat}&nwlng=${topLeft.lng}&selat=${bottomRight.lat}&selng=${bottomRight.lng}`);
     if (error) return console.error(error);
     setPotholes(data);
   }
@@ -46,14 +49,16 @@ export default function Map() {
         <MapEventHandler onBoundsChange={fetchPotholes} />
 
         {potholes.map((pothole) => (
-          <Marker key={pothole.uuid} position={[pothole.latitude, pothole.longitude]}>
-            <Popup>
-              <div className="p-2">
-                <h3 className="text-lg font-bold">{pothole.uuid}</h3>
-                <p className="mt-2 text-xs text-blue-500">
-                  {pothole.latitude.toFixed(4)}, {pothole.longitude.toFixed(4)}
-                </p>
-              </div>
+          <Marker
+            key={pothole.uuid}
+            position={[pothole.latitude, pothole.longitude]}
+            eventHandlers={{
+              popupopen: () => setActivePopupId(pothole.uuid),
+              popupclose: () => setActivePopupId(undefined)
+            }}
+          >
+            <Popup autoPan={false}>
+              <PopupContent pothole={pothole} isActive={activePopupId === pothole.uuid} />
             </Popup>
           </Marker>
         ))}

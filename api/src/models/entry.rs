@@ -17,6 +17,7 @@ pub struct Entry {
   pub timestamp: u32,
   pub latitude: f64,
   pub longitude: f64,
+  pub address: Option<String>,
   pub overall_score: u32,
   pub area_transit_ridership: u32,
   pub area_gdp: u32,

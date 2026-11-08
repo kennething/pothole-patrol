@@ -7,6 +7,7 @@ export type MiniPothole = {
 };
 
 export type Pothole = MiniPothole & {
+  address: string | null;
   areaTransitRidership: number;
   areaGdp: number;
   areaIncome: number;
