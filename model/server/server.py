@@ -43,6 +43,9 @@ SUBSCRIBERS_LOCK = threading.Lock()
 # without limit -- each queued message holds a full JPEG frame (~330 KB).
 RESULT_QUEUE_MAX = int(os.environ.get("RESULT_QUEUE_MAX", 256))
 
+# Baseline: 10,000+ establishments = 100 score
+MAX_ESTABLISHMENTS = 10000.0
+
 # Results dropped because no subscriber was attached, or because a subscriber's
 # queue overflowed. Printed on drop so the condition is visible in the logs.
 DROPPED_RESULTS = 0
@@ -50,11 +53,18 @@ DROPPED_RESULTS = 0
 # Detection model. Loaded once at import; reloading it per frame reads the
 # weights off disk for every single frame.
 #
-# NOTE / known limitation: this is the stock COCO-trained yolov8n, so it detects
-# people, cars and so on -- not potholes. The detection gate below is therefore
-# a liveness check, not a pothole check, until a pothole-trained checkpoint
-# replaces it.
-model = YOLO("yolov8n.pt")
+# POTHOLE_MODEL_PATH should point at a pothole-trained YOLO checkpoint. The
+# stock COCO yolov8n is only a fallback so the server still starts -- it has no
+# pothole class, so with it loaded the gate below emits nothing (see
+# DETECTOR_HAS_POTHOLE_CLASS).
+POTHOLE_MODEL_PATH = os.environ.get("POTHOLE_MODEL_PATH", "pothole.pt")
+if not os.path.exists(POTHOLE_MODEL_PATH):
+    print(
+        f"WARNING: no pothole detector at {POTHOLE_MODEL_PATH}; "
+        "falling back to stock COCO yolov8n.pt"
+    )
+    POTHOLE_MODEL_PATH = "yolov8n.pt"
+model = YOLO(POTHOLE_MODEL_PATH)
 
 # Severity model. Also loaded once; it is a ~95 MB checkpoint.
 SEVERITY_MODEL_PATH = os.environ.get("SEVERITY_MODEL_PATH", "length_of_pothole.pt")
@@ -80,19 +90,36 @@ MAX_LEN_CM = float(os.environ.get("MAX_LEN_CM", 100))
 
 # Only frames that actually contain a pothole are streamed downstream.
 #
-# Two gates, both of which a frame must pass:
-#   1. POTHOLE_CLASSES -- comma-separated YOLO class names that count as a
-#      pothole. Leave unset while running the stock COCO yolov8n (which has no
-#      pothole class) to accept any detection; set it to "pothole" the moment a
-#      pothole-trained checkpoint replaces yolov8n and the gate becomes exact.
-#   2. MIN_SEVERITY -- the severity model must report at least this score, which
+# Three gates, all of which a frame must pass:
+#   1. POTHOLE_CLASSES -- the detector must report a box whose class name is one
+#      of these. This is an allowlist with NO permissive fallback: a frame
+#      containing only a person or a car is not a pothole frame and is dropped.
+#   2. MIN_CONFIDENCE -- that box's confidence must reach this threshold, so a
+#      marginal guess does not become a reported pothole.
+#   3. MIN_SEVERITY -- the severity model must report at least this score, which
 #      drops frames where the regressor finds no meaningful pothole extent.
 POTHOLE_CLASSES = [
     name.strip().lower()
-    for name in os.environ.get("POTHOLE_CLASSES", "").split(",")
+    for name in os.environ.get("POTHOLE_CLASSES", "pothole,potholes,pot-hole").split(",")
     if name.strip()
 ]
+MIN_CONFIDENCE = float(os.environ.get("MIN_CONFIDENCE", 0.35))
 MIN_SEVERITY = int(os.environ.get("MIN_SEVERITY", 1))
+
+# Does the loaded detector actually know any of the pothole classes? Checked
+# once at import so the operator sees the problem at startup rather than
+# wondering why the stream is silent.
+DETECTOR_CLASS_NAMES = {
+    str(name).lower() for name in (getattr(model, "names", None) or {}).values()
+}
+DETECTOR_HAS_POTHOLE_CLASS = bool(DETECTOR_CLASS_NAMES & set(POTHOLE_CLASSES))
+if not DETECTOR_HAS_POTHOLE_CLASS:
+    print(
+        f"WARNING: detector {POTHOLE_MODEL_PATH} has no class in {POTHOLE_CLASSES} "
+        f"(it knows {sorted(DETECTOR_CLASS_NAMES)[:8]}...). NO results will be "
+        "emitted. Load a pothole-trained checkpoint via POTHOLE_MODEL_PATH, or "
+        "set POTHOLE_CLASSES to the class names it does use."
+    )
 
 # Duplicate suppression. Without this, a camera sitting at one pothole at 30fps
 # emits ~30 results per second for the same hole, each with a fresh uuidv7 -- so
@@ -261,7 +288,7 @@ def score_density(population) -> int:
     return clamp_score(people / MAX_POPULATION * 100)
 
 
-def compute_overall(severity: int, density: int, income_score: int) -> int:
+def compute_overall(severity: int, density: int, income_score: int, commercial: int) -> int:
     """Combine the populated signals into a 0-100 repair-priority score.
 
     ASSUMPTION: income is inverted (100 - income_score) so that lower-income
@@ -269,29 +296,29 @@ def compute_overall(severity: int, density: int, income_score: int) -> int:
     area_gdp and area_commercial are always 0 today, so they are left out of the
     weights rather than diluting every score toward zero.
     """
-    overall = 0.5 * severity + 0.3 * density + 0.2 * (100 - income_score)
+    overall = 0.5 * severity + 0.3 * density + 0.2 * (100 - income_score) + 0.1 * commercial
     return clamp_score(overall)
 
 
 def has_pothole(results) -> bool:
-    """True when the detector found a pothole in this frame.
+    """True only when the detector found a pothole box in this frame.
 
-    With POTHOLE_CLASSES unset, any detection passes -- the stock COCO yolov8n
-    has no pothole class, so there is nothing more specific to match on. Set
-    POTHOLE_CLASSES once a pothole-trained checkpoint is in place and the gate
-    tightens to exactly those classes with no other code change.
+    Strict allowlist: the box's class name must be in POTHOLE_CLASSES and its
+    confidence must reach MIN_CONFIDENCE. There is deliberately no "any
+    detection counts" fallback -- that let frames of people and cars through as
+    if they were potholes.
     """
     boxes = results.boxes
     if boxes is None or len(boxes) == 0:
         return False
 
-    if not POTHOLE_CLASSES:
-        return True
-
     names = results.names or {}
-    for class_id in boxes.cls.tolist():
+    class_ids = boxes.cls.tolist()
+    confidences = boxes.conf.tolist() if boxes.conf is not None else [1.0] * len(class_ids)
+
+    for class_id, confidence in zip(class_ids, confidences):
         label = str(names.get(int(class_id), class_id)).lower()
-        if label in POTHOLE_CLASSES:
+        if label in POTHOLE_CLASSES and confidence >= MIN_CONFIDENCE:
             return True
     return False
 
@@ -389,18 +416,18 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
 
             income_score = score_income(census_data.get("median_household_income"))
             density_score = score_density(census_data.get("population"))
-
+            commercial_data = get_area_commercial_by_lat_lon(frame.latitude, frame.longitude)["area_commercial_score"]
             result_msg = result_pb2.ProcessingResult(
                 uuidv7=get_uuidv7(),
                 timestamp=int(frame.timestamp) & 0xFFFFFFFF,  # Clamp to uint32 max
                 data=frame.data,
                 latitude=frame.latitude,
                 longitude=frame.longitude,
-                overall_score=compute_overall(severity, density_score, income_score),
+                overall_score=compute_overall(severity, density_score, income_score, commercial_data),
                 area_transit_ridership=0,  # no data source yet
                 area_gdp=0,  # no data source yet
                 area_income=income_score,
-                area_commercial=0,  # no data source yet
+                area_commercial=commercial_data,
                 traffic_density=density_score,
                 pothole_severity=severity,
             )
@@ -432,6 +459,7 @@ class ProcessingServiceServicer(result_pb2_grpc.ProcessingServiceServicer):
                     break
 
                 try:
+                    print(item)
                     yield item
                 except (grpc.RpcError, GeneratorExit):
                     # The item is already off the queue at this point. Put it
@@ -543,6 +571,54 @@ def get_data_by_lat_lon(lat, lon, api_key="a9bf4bb4a132bfcfb283de32039ffaf8065ef
         "median_household_income": int(values[2]) if values[2] else None
     }
 
+def get_area_commercial_by_lat_lon(lat: float, lon: float, api_key: str = "a9bf4bb4a132bfcfb283de32039ffaf8065ef7da") -> dict:
+    # -------------------------------------------------------------------------
+    # Step 1: Reverse Geocode (lat, lon) -> State (2-digit) & County (3-digit)
+    # Note: Census Geocoder expects x=longitude, y=latitude
+    # -------------------------------------------------------------------------
+    geo_url = (
+        f"https://geocoding.geo.census.gov/geocoder/geographies/coordinates?"
+        f"x={lon}&y={lat}&benchmark=Public_AR_Current&vintage=Current_Current&format=json"
+    )
+
+    try:
+        geo_resp = requests.get(geo_url, timeout=3.0).json()
+        tracts = geo_resp.get("result", {}).get("geographies", {}).get("Census Tracts", [])
+        if not tracts:
+            return {"total_establishments": 0, "area_commercial_score": 0, "error": "Location outside US or unmapped area"}
+
+        tract_info = tracts[0]
+        geoid = tract_info.get("GEOID", "")
+        state = str(tract_info.get("STATE") or (geoid[:2] if len(geoid) >= 2 else "")).zfill(2)
+        county = str(tract_info.get("COUNTY") or (geoid[2:5] if len(geoid) >= 5 else "")).zfill(3)
+    except Exception as error:
+        return {"total_establishments": 0, "area_commercial_score": 0, "error": f"Geocoder failed: {error}"}
+
+    # -------------------------------------------------------------------------
+    # Step 2: Query County Business Patterns API using extracted FIPS
+    # -------------------------------------------------------------------------
+    cbp_url = f"https://api.census.gov/data/2023/cbp?get=ESTAB,NAME&for=county:{county}&in=state:{state}"
+    if api_key:
+        cbp_url += f"&key={api_key}"
+
+    try:
+        cbp_resp = requests.get(cbp_url, timeout=3.0)
+        if cbp_resp.status_code == 200:
+            data = cbp_resp.json()
+            if len(data) >= 2:
+                total_estab = int(data[1][0])
+                score = max(0, min(100, int(round((total_estab / MAX_ESTABLISHMENTS) * 100))))
+                
+                return {
+                    "state": state,
+                    "county": county,
+                    "total_establishments": total_estab,
+                    "area_commercial_score": score
+                }
+    except Exception as error:
+        return {"total_establishments": 0, "area_commercial_score": 0, "error": f"CBP lookup failed: {error}"}
+
+    return {"total_establishments": 0, "area_commercial_score": 0}
 
 if __name__ == "__main__":
     serve()
