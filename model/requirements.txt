@@ -15,6 +15,7 @@ grpcio==1.85.1
 grpcio-tools==1.85.1
 protobuf
 requests
+python-dotenv
 
 # Severity model (length_of_pothole.pt is a timm res2net50d checkpoint).
 # For a CPU-only install, use the PyTorch CPU wheels:
