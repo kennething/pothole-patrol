@@ -14,7 +14,19 @@ use crate::models::Entry;
 ///
 /// **Output**:
 /// ```ts
-/// []
+/// {
+///   uuid: string;
+///   timestamp: number;
+///   latitude: number;
+///   longitude: number;
+///   overall_score: number;
+///   area_transit_ridership: number;
+///   area_gdp: number;
+///   area_income: number;
+///   area_commercial: number;
+///   traffic_density: number;
+///   pothole_severity: number;
+/// }[]
 /// ```
 #[get("/area?<nwlat>&<nwlng>&<selat>&<selng>")]
 pub async fn area(mut db: Connection<Db>, nwlat: f64, nwlng: f64, selat: f64, selng: f64) -> Result<Json<Vec<Entry>>, Status> {
