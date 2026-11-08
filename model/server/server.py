@@ -27,7 +27,7 @@ STREAM_QUEUES = {}
 
 # Initialize YOLO model
 model = YOLO("yolov8n.pt")
-
+RESULT_QUEUE = queue.Queue()
 
 
 
@@ -94,9 +94,7 @@ class VideoServiceServicer(video_pb2_grpc.VideoServiceServicer):
 
 
       # 5. Push result to queue for downstream consumption
-      if stream_id not in STREAM_QUEUES:
-        STREAM_QUEUES[stream_id] = queue.Queue()
-      STREAM_QUEUES[stream_id].put(result_msg)
+      RESULT_QUEUE.put(result_msg)
 
 
     return video_pb2.StreamResponse(frames_received=frames_processed)
@@ -130,7 +128,7 @@ class ProcessingServiceServicer(result_pb2_grpc.ProcessingServiceServicer):
 
     while context.is_active():
         # 1. Fetch current queue instance dynamically to avoid stale references
-        q = STREAM_QUEUES.get(request.stream_id)
+        q = RESULT_QUEUE
 
         if q is None:
             time.sleep(0.1)
